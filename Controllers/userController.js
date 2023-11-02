@@ -77,6 +77,8 @@ const verifyEmail = asyncHandler(async (req, res) => {
         Status: 1,
         Message: "Registration successful",
         info: user,
+        UserToken: generateToken(user._id),
+
       });
     } else if (pass_req == 1) {
       res.status(200).json({
@@ -216,6 +218,7 @@ const forgetpass = asyncHandler(async (req, res) => {
     Status: 1,
     Message: "otp sent successfully",
     user_id: user._id,
+    otp:resetToken
   });
 });
 
