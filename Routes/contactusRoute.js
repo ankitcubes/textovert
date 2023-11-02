@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const {contactUs,getAllcontactUs} = require('../Controllers/contactusController');
-const { protect } = require('../middlewares/auth.js');
+const { protect } = require('../Middlewares/auth');
 
 
 
