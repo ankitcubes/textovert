@@ -75,12 +75,13 @@ const verifyEmail = asyncHandler(async (req, res) => {
       await user.save();
       res.status(200).json({
         Status: 1,
-        Message: "Registration successful",
+        Message: "Registration successfully",
         info: user,
         UserToken: generateToken(user._id),
-
       });
     } else if (pass_req == 1) {
+      user.emailverified = true;
+      user.otp = null;
       res.status(200).json({
         Status: 1,
         Message: "OTP verified successfully",
@@ -104,9 +105,9 @@ const resendOTP = asyncHandler(async (req, res) => {
   // const user = await User.findById(req.params.id);
   const email = req.params.id;
 
-  const userExists = await User.findOne({ email });
+  const user = await User.findOne({ email });
 
-  if (!userExists) {
+  if (!user) {
     return res.status(200).json({
       Status: 0,
       Message: "Email is not Registered",
@@ -166,6 +167,7 @@ const loginUser = asyncHandler(async (req, res) => {
       return res.status(200).json({
         Status: 2,
         Message: "Email is not verified.Please verify your email",
+        user_id: user._id,
       });
     }
   }
@@ -179,8 +181,8 @@ const loginUser = asyncHandler(async (req, res) => {
       Message: "Login successful",
       info: {
         user_id: user._id,
-        first_name: user.fname,
-        last_name: user.lname,
+        first_name: user.fname ?? "",
+        last_name: user.lname ?? "",
         email_id: user.email,
         user_role: user.role,
         UserToken: generateToken(user._id),
@@ -206,6 +208,12 @@ const forgetpass = asyncHandler(async (req, res) => {
     });
   }
 
+  if(user.logintype != "email"){
+    return res.status(200).json({
+      Status: 0,
+      Message: "You can not do forgot password for this email because you did login with different login tyoe",
+    });
+  }
   // Generate a reset token and set an expiration time
   const resetToken = Math.floor(1000 + Math.random() * 9000);
   // const resetExpires = Date.now() + 300000; // 5 min
@@ -218,24 +226,67 @@ const forgetpass = asyncHandler(async (req, res) => {
     Status: 1,
     Message: "otp sent successfully",
     user_id: user._id,
-    otp:resetToken
+    otp: resetToken,
   });
 });
 
 const changepass = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id);
+
+  if (!user) {
+    return res.status(200).json({
+      Status: 0,
+      Message: "User not found",
+    });
+  }
+  const { oldpassword, newpassword} = req.body;
+  if (!oldpassword || !newpassword) {
+    return res.status(200).json({
+      Status: 0,
+      Message: "Please fill all fields",
+    });
+  }
+  // const {otp} = req.body;
+  // console.log(otp);
+  if (!(await bcrypt.compare(oldpassword, user.password))) {
+    return res.status(200).json({
+      Status: 0,
+      Message: "Old password is not correct",
+    });
+  }
+
+  if (await bcrypt.compare(newpassword, user.password)) {
+    return res.status(200).json({
+      Status: 0,
+      Message: "New password and old password cannot be same",
+    });
+  }
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(newpassword, salt);
+
+  user.password = hashedPassword;
+  user.resettoken = null;
+  user.resettokentime = null;
+  await user.save();
+  res.status(200).json({
+    Status: 1,
+    Message: "Change password successful",
+  });
+});
+
+const resetpass = asyncHandler(async (req, res) => {
   const user = await User.findById(req.params.id);
   // const {otp} = req.body;
   // console.log(otp);
-  if (req.body.password && req.body.confirmpassword) {
+  if (req.body.password) {
     const newpassword = req.body.password;
-    const confirmpassword = req.body.confirmpassword;
 
-    if (await bcrypt.compare(newpassword, user.password)) {
-      return res.status(200).json({
-        Status: 0,
-        Message: "New password and old password cannot be same",
-      });
-    }
+    // if (await bcrypt.compare(newpassword, user.password)) {
+    //   return res.status(200).json({
+    //     Status: 0,
+    //     Message: "New password and old password cannot be same",
+    //   });
+    // }
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(newpassword, salt);
 
@@ -320,6 +371,7 @@ const upload = multer({
 });
 
 const updateUserProfile = asyncHandler(async (req, res) => {
+  console.log(req.user._id);
   try {
     const user = await User.findById(req.user._id);
     console.log(user);
@@ -380,11 +432,12 @@ const updateUserProfile = asyncHandler(async (req, res) => {
         }
       }
 
-      const { fname, lname, phone_number, country_code } = req.body;
+      const { fname, lname, phone_number, country_code,ios_code } = req.body;
       user.fname = fname || user.fname;
       user.lname = lname || user.lname;
       user.phone = phone_number || user.phone;
       user.country_code = country_code || user.country_code;
+      user.ios_code = ios_code || user.ios_code;
 
       await user.save();
 
@@ -393,9 +446,9 @@ const updateUserProfile = asyncHandler(async (req, res) => {
         Message: "Updated successfully",
         info: {
           user_id: user._id,
-          first_name: user.fname,
-          last_name: user.lname,
-
+          first_name: user.fname??"",
+          last_name: user.lname??"",
+          phone:user.phone??"",
           user_profile: user.profilepic || "generaluserpic.png",
           user: user,
         },
@@ -406,6 +459,7 @@ const updateUserProfile = asyncHandler(async (req, res) => {
     res.status(200).json({
       Status: 0,
       Message: "Something went wrong. Profile not updated",
+      err:err
     });
   }
 });
@@ -427,6 +481,105 @@ const deleteUserProfile = asyncHandler(async (req, res) => {
   }
 });
 
+
+//Thiredparty Api
+
+const thirdpartyUser = asyncHandler(async (req, res) => {
+  console.log("login_by_thirdparty api called", req.body);
+  const { email, loginbythirdpartyid, logintype,fname,lname } = req.body;
+  if (!email || !loginbythirdpartyid || !logintype) {
+    return res.status(200).json({
+      Status: 0,
+      Message: "Please fill all the fields",
+    });
+  }
+  const user = await User.findOne({email:email});
+  if(user){
+    if (user.logintype != logintype){
+      return res.status(200).json({
+        Status: 0,
+        Message: "this emial is already login with another login method",
+      });
+    }
+  }
+  const thirdpartyuser = await User.findOne({loginbythirdpartyid:loginbythirdpartyid, });
+
+console.log(thirdpartyuser);
+console.log(user);
+  if (thirdpartyuser) {
+   
+
+    if (thirdpartyuser.logintype == logintype && thirdpartyuser.loginbythirdpartyid == loginbythirdpartyid) {
+      console.log(thirdpartyuser.logintype);
+      res.status(200).json({
+        Status: 1,
+        Message: "Login successful",
+        info: {
+          user_id: thirdpartyuser._id,
+          fname: thirdpartyuser.fname ?? "",
+          lname: thirdpartyuser.lname ?? "",
+          email_id: thirdpartyuser.email,
+          user_role: thirdpartyuser.role,
+          issignup:0,
+          UserToken: generateToken(thirdpartyuser._id),
+        },
+      });
+    } else {
+
+
+      return res.status(200).json({
+        Status: 0,
+        Message: "this emial is already login with another login method",
+      });
+    }
+  } else {
+   const emailverified = true;
+    const newuser = await User.create({
+      email,
+     logintype,
+     loginbythirdpartyid,
+     emailverified,
+     fname,
+     lname,
+
+    });
+    console.log(newuser);
+if(newuser){
+  res.status(200).json({
+    Status: 1,
+    Message: "signup successful",
+    info: {
+      user_id: newuser._id,
+      fname: newuser.fname ?? "",
+      lname: newuser.lname ?? "",
+      email_id: newuser.email,
+      user_role: newuser.role,
+      issignup:1,
+      UserToken: generateToken(newuser._id),
+    },
+  });
+}
+
+
+  }
+
+
+});
+
+
+const users = asyncHandler(async (req, res) => {
+  const users = await User.findOne({email: req.body.email});
+  res.status(200).json({
+    Status: 1,
+    Message: "Login successful",
+    info:users,
+  });
+
+
+});
+
+
+
 module.exports = {
   registerUser,
   verifyEmail,
@@ -437,4 +590,149 @@ module.exports = {
   getUserProfile,
   updateUserProfile,
   deleteUserProfile,
+  resetpass,
+  thirdpartyUser,
+  users
 };
+
+// exports.login_by_thirdparty = (req, result) => {
+//   console.log("login_by_thirdparty api called", req.body);
+//   var user_data = {};
+//   const sign = {};
+//   var body = {};
+//   var email_id = req.body.email_id ? req.body.email_id : "";
+//   db.query(
+//     "Select * from tbl_users where thirdparty_id = ? OR email_id = ?",
+//     [req.body.thirdparty_id, email_id],
+//     (err, data) => {
+//       if (err) {
+//         console.log("error: ", err);
+//         result(err, null);
+//         return;
+//       } else {
+//         var token_data = {
+//           device_token: req.body.device_token,
+//           device_type: req.body.device_type,
+//           device_id: req.body.device_id,
+//         };
+//         user_data.thirdparty_id = req.body.thirdparty_id;
+//         user_data.is_email_verified = 1;
+//         if (req.body.first_name) {
+//           user_data.first_name = req.body.first_name;
+//         }
+//         if (req.body.username) {
+//           user_data.username = req.body.username;
+//         }
+//         if (req.body.last_name) {
+//           user_data.last_name = req.body.last_name;
+//         }
+//         if (req.body.email_id) {
+//           user_data.email_id = req.body.email_id;
+//         }
+//         if (req.body.login_type) {
+//           user_data.login_type = req.body.login_type;
+//         }
+//         if (data.length <= 0) {
+//           console.log("sign up");
+//           usersService.findByUsername(req.body.username, (err, res1) => {
+//             if (err) {
+//               console.log(err);
+//             } else {
+//               if (res1) {
+//                 body.Status = 0;
+//                 body.Message = "Username is already exists in our records";
+//                 result(null, body);
+//               } else {
+//                 db.query(
+//                   "INSERT INTO tbl_users SET ?",
+//                   [user_data],
+//                   (err, res3) => {
+//                     if (err) {
+//                       console.log("error", err);
+//                       result(err, null);
+//                       return;
+//                     } else {
+//                       token_data.user_id = res3.insertId;
+//                       sign.sub = res3.insertId;
+//                       usersService.manage_token(token_data, (err, res4) => {
+//                         if (err) {
+//                           console.log("error", err);
+//                           result(err, null);
+//                           return;
+//                         } else {
+//                           body.Status = 1;
+//                           body.Message = "Registration successful";
+//                           body.info = res4[0];
+//                           body.UserToken = jwt.sign(sign, "dont_be_oversmart");
+//                           result(null, body);
+//                           return;
+//                         }
+//                       });
+//                     }
+//                   }
+//                 );
+//               }
+//             }
+//           });
+//         } else {
+//           if (data[0].is_block == 1) {
+//             body.Status = 0;
+//             body.Message =
+//               "An account blocked with your email. Please contact to admin.";
+//             result(null, body);
+//             return;
+//           } else if (data[0].is_delete == 1) {
+//             body.Status = 0;
+//             body.Message =
+//               "An account deleted with your email. Please contact to admin.";
+//             result(null, body);
+//             return;
+//           } else if (data[0].login_type != req.body.login_type) {
+//             body.Status = 0;
+//             body.Message = "You are login with another login method";
+//             result(null, body);
+//             return;
+//           } else if (
+//             req.body.email_id &&
+//             data[0].email_id != null &&
+//             data[0].email_id != req.body.email_id
+//           ) {
+//             body.Status = 0;
+//             body.Message = "Please entre valid email";
+//             result(null, body);
+//             return;
+//           } else {
+//             db.query(
+//               "UPDATE tbl_users SET ? WHERE user_id = ?",
+//               [user_data, data[0].user_id],
+//               (err, res1) => {
+//                 if (err) {
+//                   console.log("error", err);
+//                   result(err, null);
+//                   return;
+//                 } else {
+//                   token_data.user_id = data[0].user_id;
+//                   sign.sub = data[0].user_id;
+//                   usersService.manage_token(token_data, (err, res2) => {
+//                     if (err) {
+//                       console.log("error", err);
+//                       result(err, null);
+//                       return;
+//                     } else {
+//                       body.Status = 1;
+//                       body.Message = "Login successful";
+//                       body.info = res2[0];
+//                       body.UserToken = jwt.sign(sign, "dont_be_oversmart");
+//                       result(null, body);
+//                       return;
+//                     }
+//                   });
+//                 }
+//               }
+//             );
+//           }
+//         }
+//       }
+//     }
+//   );
+// };

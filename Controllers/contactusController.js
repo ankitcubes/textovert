@@ -3,6 +3,7 @@ const asyncHandler = require("express-async-handler");
 const User = require("../Models/user");
 
 const contactUs = asyncHandler(async (req, res) => {
+
   console.log(req.body);
   console.log(req.params.id);
   const user_id = req.params.id;
@@ -20,6 +21,7 @@ const contactUs = asyncHandler(async (req, res) => {
     user_id,
     subject,
     message,
+
   });
 
   if (Contactus) {
@@ -36,7 +38,7 @@ const contactUs = asyncHandler(async (req, res) => {
 
 const getAllcontactUs = asyncHandler(async (req, res) => {
 
-  const contactus =await Contactus.find();
+  const contactus =await Contactus.find({user_id:req.User._id});
 
   if (contactus) {
     return res.status(200).json({
