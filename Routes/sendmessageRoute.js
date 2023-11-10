@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const {sendMessage} = require('../Controllers/sendmessgaecontroller');
-const { protect } = require('../middlewares/auth');
+const {sendMessage,sendMessageonTime} = require('../Controllers/sendmessgaecontroller');
+const { protect } = require('../Middlewares/auth');
 
 
 
 
-router.route('/sendmessage').post(sendMessage);
+router.route('/sendmessage').get(sendMessage);
+router.route('/sendMessageonTime').get(sendMessageonTime);
 
 
 module.exports = router;

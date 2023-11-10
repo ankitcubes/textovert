@@ -10,7 +10,9 @@ const scheduleSchema = new mongoose.Schema({
     iso_code: { type: String, },                  //phone number
     message_type: { type: String, },    
     date: [],   
-    nextdate:{ type: String, },
+    utcdate: [],
+    utctime: { type: String,},
+    nextdate:{ type: String,},
     time:  { type: String, },
     repeat:{ type: String, },
     userid:{ type: Schema.Types.ObjectId,ref: 'users',required:true }
