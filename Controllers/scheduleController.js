@@ -1,7 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const Schedule = require("../Models/schedule");
 const moment = require("moment");
-
+const Device = require("../Models/device");
 const createSchedule = asyncHandler(async (req, res) => {
   const userid = req.user._id;
   console.log(userid);
@@ -16,6 +16,8 @@ const createSchedule = asyncHandler(async (req, res) => {
     repeat,
     iso_code,
     dateList,
+    utctime,
+    utcdateList,
   } = req.body;
 
   if (!message || !label || !message_type || !time || !dateList) {
@@ -25,21 +27,20 @@ const createSchedule = asyncHandler(async (req, res) => {
     });
   }
 
-  const datelist = dateList.toString().split(",");
-  const date = [];
-  const utcdate = [];
-  var utctime;
-  datelist.forEach((element) => {
-    const localDate = new Date(element + "T" + time);
-    const utcDate = new Date(localDate.toUTCString());
-    console.log(utcDate);
-    date.push(element);
-    utcdate.push(moment.utc(utcDate).format("YYYY-MM-DD"));
-    utctime = moment.utc(utcDate).format("HH:mm:ss");
-  });
-
-console.log(utcdate);
-console.log(utctime);
+  // const datelist = dateList.toString().split(",");
+  const date = dateList.toString().split(",");
+  const utcdate = utcdateList.toString().split(",");
+  // const date = [];
+  // const utcdate = [];
+  // var utctime;
+  // datelist.forEach((element) => {
+  //   const localDate = new Date(element + "T" + time);
+  //   const utcDate = new Date(localDate.toUTCString());
+  //   console.log(utcDate);
+  //   date.push(element);
+  //   utcdate.push(moment.utc(utcDate).format("YYYY-MM-DD"));
+  //   utctime = moment.utc(utcDate).format("HH:mm:ss");
+  // });
 
   const nextdate = utcdate[0];
   const schedule = await Schedule.create({
@@ -66,17 +67,6 @@ console.log(utctime);
   });
 });
 
-const getAllSchedule = asyncHandler(async (req, res) => {
-  const schedules = await Schedule.find({ userid: req.user._id }).sort({
-    createdAt: -1,
-  });
-
-  return res.status(200).json({
-    Status: 1,
-    Message: "create schedule",
-    info: schedules,
-  });
-});
 const getAllSchedulebyId = asyncHandler(async (req, res) => {
   const schedule = await Schedule.findById(req.params.id);
 
@@ -107,32 +97,12 @@ const updateSchedule = asyncHandler(async (req, res) => {
     repeat,
     iso_code,
     dateList,
+    utctime,
+    utcdateList,
   } = req.body;
 
-
- 
-  const date = [];
-  const utcdate = [];
-  var utctime;
-  if (dateList) {
-    const datelist = dateList.split(",");
-    datelist.forEach((element) => {
-      const localDate = new Date(element + "T" + time);
-      const utcDate = new Date(localDate.toUTCString());
-      utctime = moment.utc(utcDate).format("HH:mm:ss").toString();
-      date.push(element);
-      utcdate.push(moment.utc(utcDate).format("YYYY-MM-DD"));
-    });
-    
-    // datelist.forEach((element) => {
-    //   date.push(element);
-    // });
-    // console.log(date);
-  }
-
-
-
-
+  const date = dateList.toString().split(",");
+  const utcdate = utcdateList.toString().split(",");
   const nextdate = utcdate[0];
 
   schedule.email = email || schedule.fname;
@@ -173,47 +143,71 @@ const deleteSchedule = asyncHandler(async (req, res) => {
 });
 
 const adddate = asyncHandler(async (req, res) => {
-  console.log(req.body);
+  // console.log(req.body);
   const { datelist, time } = req.body;
-  const date = [];
-  var newtime = " ";
-
-  const newdate = await moment.utc("2023-11-10 01:00:00").format("YYYY-MM-DD HH:mm:ss");
-  date.push(newdate);
-  // var start = new Date("2023-11-10 01:00:00");
-
-  // var now_utc = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(),
-  // start.getUTCDate(), start.getUTCHours(),
-  // start.getUTCMinutes(), start.getUTCSeconds());
 
   // Create a date and time in a specific time zone (local time)
-  // Replace this with your local date and time
+  const localDate = new Date("2023-11-10T12:00:00"); // Replace this with your local date and time
 
   // Convert the local date to UTC date
-  // const localDate = new Date('T12:30:00');
-  // const utcDate = new Date(localDate.toUTCString());
+  const utcDate = new Date(localDate.toISOString());
+  const date = Date();
 
-  datelist.split(",").forEach((element) => {
-    const localDate = new Date(element + "T" + time);
-
-    const utcDate = new Date(localDate.toUTCString());
-date.push(utcDate);
-    // date.push(moment.utc(utcDate).format("YYYY-MM-DD"));
-    // newtime = moment.utc(utcDate).format("HH:mm:ss");
-
-  });
+  // console.log("Local Date and Time:", localDate);
+  // console.log("UTC Date and Time:", utcDate);
+  console.log("UTC Date and Time:", date);
 
   return res.status(200).json({
     Status: 0,
     Message: "date List",
+    // date: date,
+    // utcDate: utcDate,
+
+    // localDate:localDate,
     date: date,
-    time: newtime,
-    // date:newdate.toISOString(),
-    // now_utc:utcDate,
-    // date: Date(),
+
+    // time: newtime,
   });
 });
+const getAllSchedule = asyncHandler(async (req, res) => {
+  const schedules = await Schedule.find({ userid: req.user._id }).sort({
+    createdAt: -1,
+  });
 
+  return res.status(200).json({
+    Status: 1,
+    Message: "create schedule",
+    info: schedules,
+  });
+});
+const getSchedule = asyncHandler(async (req, res) => {
+  const date = new Date();
+  const fdate = moment(date).format("YYYY-MM-DD");
+  const ftime = moment(date).format("HH:mm");
+
+  console.log(fdate);
+  console.log(ftime);
+  const schedules = await Schedule.find({ userid: req.user._id }).sort({
+    createdAt: -1,
+  });
+  const devices = await Device.find().sort({
+    createdAt: -1,
+  });
+
+  // const device = await Device.findOne({deviceId:"ec38a33901af6b87"});
+  const device = await Device.find({ userid: "656f171903ccba3aa9c283c2" });
+  return res.status(200).json({
+    Status: 1,
+    Message: "create schedule",
+    fdate: fdate,
+    ftime: ftime,
+    ftime1: moment(date).format("HH:mm"),
+    ftime2: moment(date).format("HH:mm:ss"),
+    info: schedules,
+    devices: devices,
+    device: device,
+  });
+});
 module.exports = {
   createSchedule,
   getAllSchedule,
@@ -221,4 +215,5 @@ module.exports = {
   deleteSchedule,
   getAllSchedulebyId,
   adddate,
+  getSchedule,
 };

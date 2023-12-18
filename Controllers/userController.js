@@ -1,14 +1,16 @@
 const asyncHandler = require("express-async-handler");
 const User = require("../Models/user");
+const Device = require("../Models/device.js");
 const sendResetPasswordEmail = require("../Middlewares/sendmail.js");
 const bcrypt = require("bcryptjs");
 const generateToken = require("../Middlewares/generateToken");
 const multer = require("multer");
+const { deviceAddUpdate } = require("../Middlewares/addupdatedeveicedata.js");
 
 const registerUser = asyncHandler(async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, devicetoken, deviceId, type } = req.body;
 
-  if (!email || !password) {
+  if (!email || !password || !devicetoken || !deviceId || !type) {
     return res.status(200).json({
       Status: 0,
       Message: "Please fill all the fields",
@@ -38,9 +40,24 @@ const registerUser = asyncHandler(async (req, res) => {
     email,
     password: hashedPassword,
     otp: otp,
+    // devicei
   });
 
   if (user) {
+    const device = await deviceAddUpdate({
+      devicetoken: devicetoken,
+      deviceId: deviceId,
+      type: type,
+      userid: user._id,
+    });
+    console.log("fsdkfjdshkj");
+    console.log(device.status);
+    if (!device.status) {
+      return res.status(200).json({
+        Status: 0,
+        Message: "Simething went wrong",
+      });
+    }
     res.status(200).json({
       Status: 1,
       Message: "Otp sent to your email for verification",
@@ -146,9 +163,9 @@ const resendOTP = asyncHandler(async (req, res) => {
   // }
 });
 const loginUser = asyncHandler(async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, devicetoken, deviceId, type } = req.body;
 
-  if (!email || !password) {
+  if (!email || !password || !devicetoken || !deviceId || !type) {
     return res.status(200).json({
       Status: 0,
       Message: "Please fill all the fields",
@@ -156,6 +173,15 @@ const loginUser = asyncHandler(async (req, res) => {
   }
 
   const user = await User.findOne({ email });
+  console.log(user.logintype);
+  console.log("fdskjfydhksjhjk");
+  if (user.logintype != "email") {
+    return res.status(200).json({
+      Status: 0,
+      Message: "This email allready login with another Method",
+      user_id: user._id,
+    });
+  }
   if (!user || !user.emailverified) {
     if (!user) {
       return res.status(200).json({
@@ -163,6 +189,7 @@ const loginUser = asyncHandler(async (req, res) => {
         Message: "Email is not Registered Please register it first",
       });
     }
+
     if (!user.emailverified) {
       return res.status(200).json({
         Status: 2,
@@ -171,11 +198,29 @@ const loginUser = asyncHandler(async (req, res) => {
       });
     }
   }
+  console.log(password);
+  console.log(user);
+  console.log(user.password);
   if (
     user &&
     (await bcrypt.compare(password, user.password)) &&
     user.emailverified
   ) {
+    const device = await deviceAddUpdate({
+      devicetoken: devicetoken,
+      deviceId: deviceId,
+      type: type,
+      userid: user._id,
+    });
+    console.log("fsdkfjdshkj");
+    console.log(device.status);
+    if (!device.status) {
+      return res.status(200).json({
+        Status: 0,
+        Message: "Simething went wrong",
+      });
+    }
+
     res.status(200).json({
       Status: 1,
       Message: "Login successful",
@@ -186,6 +231,7 @@ const loginUser = asyncHandler(async (req, res) => {
         email_id: user.email,
         user_role: user.role,
         UserToken: generateToken(user._id),
+        devicetoken: devicetoken,
       },
     });
   } else {
@@ -208,10 +254,11 @@ const forgetpass = asyncHandler(async (req, res) => {
     });
   }
 
-  if(user.logintype != "email"){
+  if (user.logintype != "email") {
     return res.status(200).json({
       Status: 0,
-      Message: "You can not do forgot password for this email because you did login with different login tyoe",
+      Message:
+        "You can not do forgot password for this email because you did login with different login tyoe",
     });
   }
   // Generate a reset token and set an expiration time
@@ -239,7 +286,7 @@ const changepass = asyncHandler(async (req, res) => {
       Message: "User not found",
     });
   }
-  const { oldpassword, newpassword} = req.body;
+  const { oldpassword, newpassword } = req.body;
   if (!oldpassword || !newpassword) {
     return res.status(200).json({
       Status: 0,
@@ -432,7 +479,7 @@ const updateUserProfile = asyncHandler(async (req, res) => {
         }
       }
 
-      const { fname, lname, phone_number, country_code,ios_code } = req.body;
+      const { fname, lname, phone_number, country_code, ios_code } = req.body;
       user.fname = fname || user.fname;
       user.lname = lname || user.lname;
       user.phone = phone_number || user.phone;
@@ -446,9 +493,9 @@ const updateUserProfile = asyncHandler(async (req, res) => {
         Message: "Updated successfully",
         info: {
           user_id: user._id,
-          first_name: user.fname??"",
-          last_name: user.lname??"",
-          phone:user.phone??"",
+          first_name: user.fname ?? "",
+          last_name: user.lname ?? "",
+          phone: user.phone ?? "",
           user_profile: user.profilepic || "generaluserpic.png",
           user: user,
         },
@@ -459,7 +506,7 @@ const updateUserProfile = asyncHandler(async (req, res) => {
     res.status(200).json({
       Status: 0,
       Message: "Something went wrong. Profile not updated",
-      err:err
+      err: err,
     });
   }
 });
@@ -481,36 +528,69 @@ const deleteUserProfile = asyncHandler(async (req, res) => {
   }
 });
 
-
 //Thiredparty Api
 
 const thirdpartyUser = asyncHandler(async (req, res) => {
   console.log("login_by_thirdparty api called", req.body);
-  const { email, loginbythirdpartyid, logintype,fname,lname } = req.body;
-  if (!email || !loginbythirdpartyid || !logintype) {
+  const {
+    email,
+    loginbythirdpartyid,
+    logintype,
+    fname,
+    lname,
+    devicetoken,
+    deviceId,
+    type,
+  } = req.body;
+  if (
+    !email ||
+    !loginbythirdpartyid ||
+    !logintype ||
+    !devicetoken ||
+    !deviceId ||
+    !type
+  ) {
     return res.status(200).json({
       Status: 0,
       Message: "Please fill all the fields",
     });
   }
-  const user = await User.findOne({email:email});
-  if(user){
-    if (user.logintype != logintype){
+  const user = await User.findOne({ email: email });
+  if (user) {
+    if (user.logintype != logintype) {
       return res.status(200).json({
         Status: 0,
         Message: "this emial is already login with another login method",
       });
     }
   }
-  const thirdpartyuser = await User.findOne({loginbythirdpartyid:loginbythirdpartyid, });
+  const thirdpartyuser = await User.findOne({
+    loginbythirdpartyid: loginbythirdpartyid,
+  });
 
-console.log(thirdpartyuser);
-console.log(user);
+  console.log(thirdpartyuser);
+  console.log(user);
   if (thirdpartyuser) {
-   
-
-    if (thirdpartyuser.logintype == logintype && thirdpartyuser.loginbythirdpartyid == loginbythirdpartyid) {
+    if (
+      thirdpartyuser.logintype == logintype &&
+      thirdpartyuser.loginbythirdpartyid == loginbythirdpartyid
+    ) {
       console.log(thirdpartyuser.logintype);
+
+      const device = await deviceAddUpdate({
+        devicetoken: devicetoken,
+        deviceId: deviceId,
+        type: type,
+        userid: user._id,
+      });
+      console.log("fsdkfjdshkj");
+      console.log(device.status);
+      if (!device.status) {
+        return res.status(200).json({
+          Status: 0,
+          Message: "Simething went wrong",
+        });
+      }
       res.status(200).json({
         Status: 1,
         Message: "Login successful",
@@ -520,65 +600,94 @@ console.log(user);
           lname: thirdpartyuser.lname ?? "",
           email_id: thirdpartyuser.email,
           user_role: thirdpartyuser.role,
-          issignup:0,
+          issignup: 0,
           UserToken: generateToken(thirdpartyuser._id),
+          devicetoken: devicetoken,
         },
       });
     } else {
-
-
       return res.status(200).json({
         Status: 0,
         Message: "this emial is already login with another login method",
       });
     }
   } else {
-   const emailverified = true;
+    const emailverified = true;
     const newuser = await User.create({
       email,
-     logintype,
-     loginbythirdpartyid,
-     emailverified,
-     fname,
-     lname,
-
+      logintype,
+      loginbythirdpartyid,
+      emailverified,
+      fname,
+      lname,
     });
+    console.log("dsakjdhaskjdhjk");
     console.log(newuser);
-if(newuser){
-  res.status(200).json({
-    Status: 1,
-    Message: "signup successful",
-    info: {
-      user_id: newuser._id,
-      fname: newuser.fname ?? "",
-      lname: newuser.lname ?? "",
-      email_id: newuser.email,
-      user_role: newuser.role,
-      issignup:1,
-      UserToken: generateToken(newuser._id),
-    },
-  });
-}
-
-
+    if (newuser) {
+      const device = await deviceAddUpdate({
+        devicetoken: devicetoken,
+        deviceId: deviceId,
+        type: type,
+        userid: newuser._id,
+      });
+      console.log("fsdkfjdshkj");
+      console.log(device.status);
+      if (!device.status) {
+        return res.status(200).json({
+          Status: 0,
+          Message: "Simething went wrong",
+        });
+      }
+      res.status(200).json({
+        Status: 1,
+        Message: "signup successful",
+        info: {
+          user_id: newuser._id,
+          fname: newuser.fname ?? "",
+          lname: newuser.lname ?? "",
+          email_id: newuser.email,
+          user_role: newuser.role,
+          issignup: 1,
+          UserToken: generateToken(newuser._id),
+        },
+      });
+    }
   }
-
-
 });
 
-
 const users = asyncHandler(async (req, res) => {
-  const users = await User.findOne({email: req.body.email});
+  const users = await User.findOne({ email: req.body.email });
   res.status(200).json({
     Status: 1,
     Message: "Login successful",
-    info:users,
+    info: users,
   });
-
-
 });
+const logout = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id);
+  console.log(user);
+  if (user) {
+    const device = await Device.findById(user.deviceid);
+    if (device) {
+      console.log(device);
+      const newdevice = await Device.deleteOne(device._id);
+      res.status(200).json({
+        Status: 1,
+        Message: "Logout successful",
+      });
+    } else {
+      res.status(200).json({
+        Status: 1,
+        Message: "Logout successful",
+      });
+    }
+  }
 
-
+  res.status(200).json({
+    Status: 0,
+    Message: "Logout successful",
+  });
+});
 
 module.exports = {
   registerUser,
@@ -592,147 +701,6 @@ module.exports = {
   deleteUserProfile,
   resetpass,
   thirdpartyUser,
-  users
+  users,
+  logout,
 };
-
-// exports.login_by_thirdparty = (req, result) => {
-//   console.log("login_by_thirdparty api called", req.body);
-//   var user_data = {};
-//   const sign = {};
-//   var body = {};
-//   var email_id = req.body.email_id ? req.body.email_id : "";
-//   db.query(
-//     "Select * from tbl_users where thirdparty_id = ? OR email_id = ?",
-//     [req.body.thirdparty_id, email_id],
-//     (err, data) => {
-//       if (err) {
-//         console.log("error: ", err);
-//         result(err, null);
-//         return;
-//       } else {
-//         var token_data = {
-//           device_token: req.body.device_token,
-//           device_type: req.body.device_type,
-//           device_id: req.body.device_id,
-//         };
-//         user_data.thirdparty_id = req.body.thirdparty_id;
-//         user_data.is_email_verified = 1;
-//         if (req.body.first_name) {
-//           user_data.first_name = req.body.first_name;
-//         }
-//         if (req.body.username) {
-//           user_data.username = req.body.username;
-//         }
-//         if (req.body.last_name) {
-//           user_data.last_name = req.body.last_name;
-//         }
-//         if (req.body.email_id) {
-//           user_data.email_id = req.body.email_id;
-//         }
-//         if (req.body.login_type) {
-//           user_data.login_type = req.body.login_type;
-//         }
-//         if (data.length <= 0) {
-//           console.log("sign up");
-//           usersService.findByUsername(req.body.username, (err, res1) => {
-//             if (err) {
-//               console.log(err);
-//             } else {
-//               if (res1) {
-//                 body.Status = 0;
-//                 body.Message = "Username is already exists in our records";
-//                 result(null, body);
-//               } else {
-//                 db.query(
-//                   "INSERT INTO tbl_users SET ?",
-//                   [user_data],
-//                   (err, res3) => {
-//                     if (err) {
-//                       console.log("error", err);
-//                       result(err, null);
-//                       return;
-//                     } else {
-//                       token_data.user_id = res3.insertId;
-//                       sign.sub = res3.insertId;
-//                       usersService.manage_token(token_data, (err, res4) => {
-//                         if (err) {
-//                           console.log("error", err);
-//                           result(err, null);
-//                           return;
-//                         } else {
-//                           body.Status = 1;
-//                           body.Message = "Registration successful";
-//                           body.info = res4[0];
-//                           body.UserToken = jwt.sign(sign, "dont_be_oversmart");
-//                           result(null, body);
-//                           return;
-//                         }
-//                       });
-//                     }
-//                   }
-//                 );
-//               }
-//             }
-//           });
-//         } else {
-//           if (data[0].is_block == 1) {
-//             body.Status = 0;
-//             body.Message =
-//               "An account blocked with your email. Please contact to admin.";
-//             result(null, body);
-//             return;
-//           } else if (data[0].is_delete == 1) {
-//             body.Status = 0;
-//             body.Message =
-//               "An account deleted with your email. Please contact to admin.";
-//             result(null, body);
-//             return;
-//           } else if (data[0].login_type != req.body.login_type) {
-//             body.Status = 0;
-//             body.Message = "You are login with another login method";
-//             result(null, body);
-//             return;
-//           } else if (
-//             req.body.email_id &&
-//             data[0].email_id != null &&
-//             data[0].email_id != req.body.email_id
-//           ) {
-//             body.Status = 0;
-//             body.Message = "Please entre valid email";
-//             result(null, body);
-//             return;
-//           } else {
-//             db.query(
-//               "UPDATE tbl_users SET ? WHERE user_id = ?",
-//               [user_data, data[0].user_id],
-//               (err, res1) => {
-//                 if (err) {
-//                   console.log("error", err);
-//                   result(err, null);
-//                   return;
-//                 } else {
-//                   token_data.user_id = data[0].user_id;
-//                   sign.sub = data[0].user_id;
-//                   usersService.manage_token(token_data, (err, res2) => {
-//                     if (err) {
-//                       console.log("error", err);
-//                       result(err, null);
-//                       return;
-//                     } else {
-//                       body.Status = 1;
-//                       body.Message = "Login successful";
-//                       body.info = res2[0];
-//                       body.UserToken = jwt.sign(sign, "dont_be_oversmart");
-//                       result(null, body);
-//                       return;
-//                     }
-//                   });
-//                 }
-//               }
-//             );
-//           }
-//         }
-//       }
-//     }
-//   );
-// };

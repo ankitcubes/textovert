@@ -15,6 +15,7 @@ const userSchema = new mongoose.Schema({
     logintype: { type: String, required: true,default: "email" },
     loginbythirdpartyid: { type: String, required: false },
     otp: { type: String, required: false },
+
     resettoken : {type:String, required: false, default: undefined},
     resettokentime : {type:String, required: false, default: undefined}, 
 }, { timestamps: true});

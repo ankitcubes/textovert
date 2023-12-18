@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { registerUser,verifyEmail,resendOTP,loginUser,forgetpass,users,changepass,resetpass,getUserProfile,updateUserProfile,deleteUserProfile,thirdpartyUser} = require('../Controllers/userController');
+const { registerUser,verifyEmail,resendOTP,loginUser,forgetpass,users,changepass,resetpass,getUserProfile,updateUserProfile,deleteUserProfile,thirdpartyUser,logout} = require('../Controllers/userController');
 const { protect } = require('../Middlewares/auth');
 
 
@@ -41,5 +41,6 @@ router.put('/updateprofile', protect, updateUserProfile);
 router.delete('/deleteprofile',protect,deleteUserProfile);  
 
 
-
+//Delete user profile
+router.delete('/logout',protect,logout);  
 module.exports = router;

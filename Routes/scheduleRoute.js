@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { createSchedule,getAllSchedule,updateSchedule,deleteSchedule,getAllSchedulebyId,adddate} = require('../Controllers/scheduleController');
+const {getSchedule, createSchedule,getAllSchedule,updateSchedule,deleteSchedule,getAllSchedulebyId,adddate} = require('../Controllers/scheduleController');
 
 
 const { protect } = require('../Middlewares/auth');
@@ -13,6 +13,8 @@ router.post('/createschedule', protect, createSchedule);
 
 //get user profile
 router.get('/getallschedule', protect,getAllSchedule);
+//get user profile
+router.get('/getSchedule', protect,getSchedule);
 
 //get user profile
 router.get('/adddate',adddate);
